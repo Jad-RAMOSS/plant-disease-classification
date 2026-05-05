@@ -48,6 +48,7 @@ const fmt = (cls) =>
     .trim()
 
 const isHealthy = (cls) => cls.toLowerCase().includes('healthy')
+const isUnidentified = (cls) => cls === 'Unidentified'
 
 function ConfidenceBar({ prediction, index, maxConfidence }) {
   const healthy = isHealthy(prediction.class)
@@ -360,21 +361,28 @@ export default function Home() {
                     {/* Top prediction banner */}
                     <div className={[
                       'rounded-xl p-4 border',
-                      isHealthy(topPred.class)
+                      isUnidentified(topPred.class)
+                        ? 'bg-amber-50 border-amber-300'
+                        : isHealthy(topPred.class)
                         ? 'bg-emerald-50 border-emerald-200'
                         : 'bg-ecu-red-light border-ecu-red/20',
                     ].join(' ')}>
                       <div className="flex items-start gap-3">
                         <div className={[
                           'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                          isHealthy(topPred.class)
+                          isUnidentified(topPred.class)
+                            ? 'bg-amber-100'
+                            : isHealthy(topPred.class)
                             ? 'bg-emerald-100'
                             : 'bg-ecu-red/10',
                         ].join(' ')}>
-                          <LeafIcon className={[
-                            'w-5 h-5',
-                            isHealthy(topPred.class) ? 'text-emerald-600' : 'text-ecu-red',
-                          ].join(' ')} />
+                          {isUnidentified(topPred.class)
+                            ? <WarningIcon className="w-5 h-5 text-amber-500" />
+                            : <LeafIcon className={[
+                                'w-5 h-5',
+                                isHealthy(topPred.class) ? 'text-emerald-600' : 'text-ecu-red',
+                              ].join(' ')} />
+                          }
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-0.5">
@@ -382,42 +390,58 @@ export default function Home() {
                           </p>
                           <p className={[
                             'font-bold text-base leading-tight',
-                            isHealthy(topPred.class) ? 'text-emerald-700' : 'text-ecu-red',
+                            isUnidentified(topPred.class)
+                              ? 'text-amber-700'
+                              : isHealthy(topPred.class)
+                              ? 'text-emerald-700'
+                              : 'text-ecu-red',
                           ].join(' ')}>
-                            {fmt(topPred.class)}
+                            {isUnidentified(topPred.class) ? 'Unidentified' : fmt(topPred.class)}
                           </p>
-                          <p className={[
-                            'text-sm font-semibold mt-1',
-                            isHealthy(topPred.class) ? 'text-emerald-600' : 'text-ecu-red/80',
-                          ].join(' ')}>
-                            {topPred.confidence.toFixed(2)}% confidence
-                          </p>
+                          {isUnidentified(topPred.class) ? (
+                            <p className="text-sm text-amber-600 mt-1 leading-snug">
+                              {topPred.message}
+                            </p>
+                          ) : (
+                            <p className={[
+                              'text-sm font-semibold mt-1',
+                              isHealthy(topPred.class) ? 'text-emerald-600' : 'text-ecu-red/80',
+                            ].join(' ')}>
+                              {topPred.confidence.toFixed(2)}% confidence
+                            </p>
+                          )}
                         </div>
                         <span className={[
                           'text-xs font-bold px-2 py-1 rounded-full flex-shrink-0',
-                          isHealthy(topPred.class)
+                          isUnidentified(topPred.class)
+                            ? 'bg-amber-100 text-amber-700'
+                            : isHealthy(topPred.class)
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-ecu-red/10 text-ecu-red',
                         ].join(' ')}>
-                          {isHealthy(topPred.class) ? 'Healthy' : 'Diseased'}
+                          {isUnidentified(topPred.class)
+                            ? 'Unknown'
+                            : isHealthy(topPred.class) ? 'Healthy' : 'Diseased'}
                         </span>
                       </div>
                     </div>
 
-                    {/* Top 5 bars */}
-                    <div className="flex flex-col gap-3.5 flex-1">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                        Top 5 Candidates
-                      </p>
-                      {predictions.map((p, i) => (
-                        <ConfidenceBar
-                          key={i}
-                          prediction={p}
-                          index={i}
-                          maxConfidence={maxConf}
-                        />
-                      ))}
-                    </div>
+                    {/* Top 5 bars — hidden for unidentified */}
+                    {!isUnidentified(topPred.class) && (
+                      <div className="flex flex-col gap-3.5 flex-1">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                          Top 5 Candidates
+                        </p>
+                        {predictions.map((p, i) => (
+                          <ConfidenceBar
+                            key={i}
+                            prediction={p}
+                            index={i}
+                            maxConfidence={maxConf}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

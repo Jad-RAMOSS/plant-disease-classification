@@ -26,6 +26,9 @@ def load_artifacts(model_path: str, class_dict_path: str):
     return model, class_dict, img_size
 
 
+CONFIDENCE_THRESHOLD = 50.0
+
+
 def predict_image(
     model,
     class_dict: Dict[int, str],
@@ -39,7 +42,17 @@ def predict_image(
 
     preds = model.predict(img, verbose=0)[0]
     top_idx = np.argsort(preds)[::-1][:5]
-    return [
+    results = [
         {'class': class_dict[int(i)], 'confidence': float(preds[i]) * 100}
         for i in top_idx
     ]
+
+    if results[0]['confidence'] < CONFIDENCE_THRESHOLD:
+        return [{
+            'class': 'Unidentified',
+            'confidence': results[0]['confidence'],
+            'low_confidence': True,
+            'message': 'Confidence too low. Please try a clearer, higher-quality image.',
+        }]
+
+    return results
