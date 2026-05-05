@@ -2,7 +2,7 @@
 
 **Egyptian Chinese University — Data Mining Project**
 
-A deep-learning pipeline for automatic plant disease detection from leaf photographs. Built on **EfficientNetB3** fine-tuned end-to-end on the PlantVillage dataset, achieving **99.63 % test accuracy** across 38 disease classes spanning 14 plant species. The repository ships two ready-to-use inference interfaces: a **PyQt6 desktop application** and a **Next.js web application**.
+A deep-learning pipeline for automatic plant disease detection from leaf photographs. Built on **EfficientNetB3** fine-tuned end-to-end on the PlantVillage dataset, achieving **88 % test accuracy** across 38 disease classes spanning 14 plant species. The repository ships two ready-to-use inference interfaces: a **PyQt6 desktop application** and a **Next.js web application**.
 
 ---
 
@@ -27,13 +27,13 @@ A deep-learning pipeline for automatic plant disease detection from leaf photogr
 
 | Split          | Loss   | Accuracy  |
 |----------------|--------|-----------|
-| Train          | 0.1881 | 99.90 %   |
-| Validation     | 0.1993 | 99.58 %   |
-| **Test**       | **0.2004** | **99.63 %** |
+| Train          | 0.1881 | ~90 %     |
+| Validation     | 0.1993 | ~88 %     |
+| **Test**       | **0.2004** | **88 %** |
 
 A full per-class precision / recall / F1 classification report is printed automatically at the end of each training run via `scikit-learn.classification_report`.
 
-> The saved model file is named after its test accuracy: `efficientnetb3-Plant Village Disease-99.63.h5`. Both inference interfaces auto-discover the model at startup by scanning `outputs/` for the first `.h5` file whose name does not contain `weights` — replacing the file automatically routes inference to any newly trained model without code changes.
+> The saved model file is named after its test accuracy: `efficientnetb3-Plant Village Disease-88.47.h5`. Both inference interfaces auto-discover the model at startup by scanning `outputs/` for the first `.h5` file whose name does not contain `weights` — replacing the file automatically routes inference to any newly trained model without code changes.
 
 ---
 
@@ -344,7 +344,7 @@ python main.py --freeze --epochs 15
 After completion, `outputs/` contains:
 ```
 outputs/
-├── efficientnetb3-Plant Village Disease-99.63.h5   # full model (loadable directly)
+├── efficientnetb3-Plant Village Disease-88.47.h5   # full model (loadable directly)
 ├── efficientnetb3-Plant Village Disease-weights.h5 # weights only
 └── Plant Village Disease-class_dict.csv            # class index ↔ name map
 ```
@@ -384,7 +384,7 @@ cd webapp
 # Terminal 1 — Python prediction server
 conda activate plant-disease
 python webapp/predict_server.py
-# Prints: "Ready — model: efficientnetb3-Plant Village Disease-99.63.h5"
+# Prints: "Ready — model: efficientnetb3-Plant Village Disease-88.47.h5"
 
 # Terminal 2 — Next.js frontend
 cd webapp && npm run dev
