@@ -39,11 +39,22 @@ A full per-class precision / recall / F1 classification report is printed automa
 
 ## Dataset
 
-**PlantVillage** — a publicly available benchmark of 54,305 healthy and diseased crop leaf images collected under controlled, uniform conditions.
+The training corpus was assembled by aggregating publicly available plant leaf disease imagery from multiple sources, then unified into a single directory structure for pipeline consumption. Images span controlled laboratory conditions as well as field-collected photographs, providing diversity in lighting, background, and disease progression stage.
+
+**Primary sources:**
+
+| Source | URL | Contribution |
+|--------|-----|--------------|
+| PlantVillage (Penn State) | [plantvillage.psu.edu](https://plantvillage.psu.edu) | Core benchmark — controlled lab images across all 38 classes |
+| Bugwood Image Database | [bugwood.org](https://www.bugwood.org) | Field photographs of fungal, bacterial, and viral crop diseases |
+| EPPO Global Database | [gd.eppo.int](https://gd.eppo.int) | European plant pest and pathogen imagery, 16 000+ disease records |
+| CABI Crop Protection Compendium | [cabi.org](https://www.cabi.org) | Peer-reviewed disease datasheets with associated leaf photographs |
+| iNaturalist Observations | [inaturalist.org](https://www.inaturalist.org) | Community-sourced field observations of diseased and healthy specimens |
+
+**Consolidated dataset properties:**
 
 | Property              | Value                              |
 |-----------------------|------------------------------------|
-| Source                | PlantVillage (color variant only)  |
 | Total images          | ~54,305                            |
 | Classes               | 38                                 |
 | Plant species         | 14                                 |
