@@ -2,7 +2,7 @@
 
 **Egyptian Chinese University — Data Mining Project**
 
-A deep-learning pipeline for automatic plant disease detection from leaf photographs. Built on **EfficientNetB3** fine-tuned end-to-end on the PlantVillage dataset, achieving **88 % test accuracy** across 38 disease classes spanning 14 plant species. The repository ships two ready-to-use inference interfaces: a **PyQt6 desktop application** and a **Next.js web application**.
+A deep-learning pipeline for automatic plant disease detection from leaf photographs. Built on **EfficientNetB3** fine-tuned end-to-end on the PlantVillage dataset, achieving **88 % test accuracy** across 38 disease classes spanning 14 plant species. The repository ships a **Next.js web application** with drag-and-drop inference, a confidence threshold guard, and an AI-powered **Treatment Assistant chatbot** for post-diagnosis guidance.
 
 ---
 
@@ -17,9 +17,8 @@ A deep-learning pipeline for automatic plant disease detection from leaf photogr
 7. [Tech Stack](#tech-stack)
 8. [Installation](#installation)
 9. [Usage — Training](#usage--training)
-10. [Usage — Desktop GUI](#usage--desktop-gui)
-11. [Usage — Web Application](#usage--web-application)
-12. [Supported Classes](#supported-classes)
+10. [Usage — Web Application](#usage--web-application)
+11. [Supported Classes](#supported-classes)
 
 ---
 
@@ -198,7 +197,7 @@ Loads the Keras model with `tf.keras.models.load_model`, reads the CSV into a `{
 ```python
 predict_image(model, class_dict, img_size, image_path) -> List[Dict]
 ```
-Loads the image with OpenCV, converts BGR→RGB, resizes to `img_size`, expands dims to batch of 1, runs `model.predict`, sorts by descending probability, and returns the top-5 predictions as `[{"class": str, "confidence": float (0–100)}, ...]`.
+Loads the image with OpenCV, converts BGR→RGB, resizes to `img_size`, expands dims to batch of 1, runs `model.predict`, sorts by descending probability, and returns the top-5 predictions as `[{"class": str, "confidence": float (0–100)}, ...]`. A **50 % confidence threshold** is applied: if the top prediction falls below this value, a single `{"class": "Unidentified", "low_confidence": true, "message": "…"}` result is returned instead, preventing overconfident misclassification on ambiguous inputs.
 
 ---
 
@@ -208,8 +207,7 @@ Loads the image with OpenCV, converts BGR→RGB, resizes to `img_size`, expands 
 project/
 │
 ├── main.py                                 # CLI training entry point
-├── gui.py                                  # PyQt6 desktop inference app
-├── requirements.txt                        # Python deps (training + GUI)
+├── requirements.txt                        # Python deps (training)
 ├── plant-village-disease-classification-acc-99-6.ipynb  # Original Kaggle notebook
 ├── ECU_Plant_Disease_Proposal-2.pdf        # Project proposal document
 │
@@ -230,9 +228,11 @@ project/
 │   └── visualize.py                        # Sample image grid, loss/accuracy curves
 │
 └── webapp/                                 # Next.js web application
-    ├── predict_server.py                   # Flask inference API (port 8001)
+    ├── predict_server.py                   # Flask API (port 8001) — predict + chat endpoints
     ├── start.sh                            # One-command launcher (Flask + Next.js)
-    ├── requirements.txt                    # Flask
+    ├── requirements.txt                    # Flask, requests, python-dotenv
+    ├── .env                                # DEEPSEEK_API_KEY — gitignored, create from .env.example
+    ├── .env.example                        # Key placeholder for teammates
     ├── package.json
     ├── next.config.js                      # Proxy rewrite: /api/python/* → :8001
     ├── tailwind.config.js                  # ECU brand colour tokens
@@ -241,7 +241,7 @@ project/
     │   └── ecu-logo.png
     ├── pages/
     │   ├── _app.js
-    │   └── index.js                        # Drag-and-drop classifier UI
+    │   └── index.js                        # Classifier UI + Treatment Assistant chatbot
     └── styles/
         └── globals.css
 ```
@@ -250,7 +250,7 @@ project/
 
 ## Tech Stack
 
-### Python / Training & GUI
+### Python / Training
 
 | Library              | Version   | Role                                               |
 |----------------------|-----------|----------------------------------------------------|
@@ -261,8 +261,9 @@ project/
 | OpenCV (`cv2`)       | 4.9.0.80  | Image I/O, BGR→RGB conversion, resizing            |
 | Matplotlib           | 3.8.2     | Training curves, sample image grids                |
 | Seaborn              | 0.13.1    | Plot styling                                       |
-| PyQt6                | 6.11.0    | Desktop GUI (drag-and-drop, threaded inference)    |
-| Flask                | 3.x       | Lightweight HTTP inference server for the web app  |
+| Flask                | 3.x       | Lightweight HTTP inference + chat server           |
+| requests             | 2.31+     | DeepSeek API calls from the Flask chat endpoint    |
+| python-dotenv        | 1.0+      | Loads `DEEPSEEK_API_KEY` from `webapp/.env`        |
 
 ### Web Application
 
@@ -273,33 +274,37 @@ project/
 | Tailwind CSS    | 3.x     | Utility-first styling, ECU brand colour tokens    |
 | react-dropzone  | 14.x    | Drag-and-drop file upload                         |
 | Node.js         | 18+     | Next.js runtime                                   |
+| DeepSeek API    | —       | LLM powering the Treatment Assistant chatbot      |
 
 ### Web Inference Architecture
 
 ```
 Browser
   │  POST /api/python/predict  (multipart FormData)
+  │  POST /api/python/chat     (JSON: {disease, history})
   ▼
 Next.js dev server  :3000
   │  rewrite rule in next.config.js  →  no CORS needed
   ▼
 Flask server  :8001  (predict_server.py)
-  │  save to tempfile → predict_image() → delete tempfile
+  │  /predict → tempfile → predict_image() → delete tempfile
+  │  /chat    → DeepSeek API (deepseek-chat model)
   ▼
 TensorFlow model  (loaded once at startup, ~30 s cold start)
-  │  returns top-5  [{class, confidence}]
+  │  returns top-5 [{class, confidence}]  OR  {Unidentified} if conf < 50%
   ▼
-Browser renders confidence bars + class dropdown
+Browser renders results + Treatment Assistant chatbot panel
 ```
 
-The Flask server exposes four endpoints:
+The Flask server exposes five endpoints:
 
-| Endpoint       | Method | Response payload                                              |
-|----------------|--------|---------------------------------------------------------------|
-| `/health`      | GET    | `{"status": "ok"}`                                            |
-| `/model-info`  | GET    | `{"model": "...", "classes": 38, "img_size": [224, 224]}`     |
-| `/classes`     | GET    | `{"classes": [{"index": 0, "name": "Apple___Apple_scab"}, …]}`|
-| `/predict`     | POST   | `{"predictions": [{"class": "…", "confidence": 97.4}, …]}`   |
+| Endpoint       | Method | Response payload                                                               |
+|----------------|--------|--------------------------------------------------------------------------------|
+| `/health`      | GET    | `{"status": "ok"}`                                                             |
+| `/model-info`  | GET    | `{"model": "...", "classes": 38, "img_size": [224, 224]}`                      |
+| `/classes`     | GET    | `{"classes": [{"index": 0, "name": "Apple___Apple_scab"}, …]}`                 |
+| `/predict`     | POST   | `{"predictions": [{"class": "…", "confidence": 97.4}, …]}`                    |
+| `/chat`        | POST   | `{"reply": "…"}` — DeepSeek response scoped to the diagnosed disease           |
 
 ---
 
@@ -317,14 +322,23 @@ The Flask server exposes four endpoints:
 conda create -n plant-disease python=3.11 -y
 conda activate plant-disease
 
-# Training + GUI dependencies
+# Training dependencies
 pip install -r requirements.txt
 
-# Web server dependency
-pip install flask
+# Web server dependencies (Flask + DeepSeek chat support)
+pip install -r webapp/requirements.txt
 ```
 
-### 2. Node.js Dependencies
+### 2. DeepSeek API Key (required for chatbot)
+
+```bash
+cp webapp/.env.example webapp/.env
+# Open webapp/.env and paste your key:
+#   DEEPSEEK_API_KEY=sk-...
+# Get a key at: https://platform.deepseek.com/api_keys
+```
+
+### 3. Node.js Dependencies
 
 ```bash
 cd webapp
@@ -362,22 +376,6 @@ outputs/
 
 ---
 
-## Usage — Desktop GUI
-
-```bash
-conda activate plant-disease
-python gui.py
-```
-
-The app (`PlantVisionApp`) loads the model in a background `QThread` on startup. A header status label transitions from yellow "Initialising…" to green "Ready" when loading is complete. Drag a leaf image onto the drop zone or click "Browse…" — inference runs in a second background thread and results appear immediately.
-
-**UI layout:**
-- **Left panel** — drag-and-drop zone with image preview
-- **Right panel** — predicted plant name, disease / condition label, colour-coded confidence percentage + progress bar (green = healthy, red = diseased), top-5 ranked predictions with individual confidences
-- **Footer** — active model filename + dataset summary
-
----
-
 ## Usage — Web Application
 
 ### One-command launch (recommended)
@@ -410,8 +408,10 @@ Open **http://localhost:3000**.
 | Drag-and-drop upload | JPG, PNG, WebP, BMP — or click to browse |
 | Server status badge | Live green / yellow / red indicator in the header |
 | Active model name | Fetched from `/model-info`, updates when model is swapped |
-| Top prediction banner | Green for healthy, red for diseased; shows confidence % |
-| Top-5 confidence bars | Bars proportional to the top prediction's confidence |
+| Top prediction banner | Green for healthy, red for diseased, amber for unidentified |
+| Confidence threshold | Predictions below 50% return "Unidentified" with a retry prompt instead of a low-confidence class |
+| Top-5 confidence bars | Bars proportional to the top prediction's confidence (hidden when unidentified) |
+| Treatment Assistant | AI chatbot (DeepSeek) scoped to the diagnosed disease; auto-opens on disease detection; suggested questions, message bubbles, typing indicator |
 | Classes dropdown | Collapsible panel, all 38 classes grouped by plant, live search filter, colour-coded pills |
 | About panel | Architecture, dataset, class count, species count |
 
