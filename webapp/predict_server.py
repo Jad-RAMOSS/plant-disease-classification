@@ -7,9 +7,15 @@ import os
 import sys
 import tempfile
 import warnings
+import requests as http_requests
 
 warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
+
+DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY', '')
 
 # Make the parent plant_disease package importable
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -85,6 +91,54 @@ def classes():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+
+@app.route('/chat', methods=['POST', 'OPTIONS'])
+def chat():
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    if not DEEPSEEK_API_KEY:
+        return jsonify({'error': 'Chat service not configured — add DEEPSEEK_API_KEY to webapp/.env'}), 503
+
+    data = request.get_json(silent=True) or {}
+    disease = str(data.get('disease', 'Unknown plant disease'))[:200]
+    history = data.get('history', [])
+
+    clean_history = [
+        {'role': m['role'], 'content': str(m['content'])[:2000]}
+        for m in history
+        if isinstance(m, dict)
+        and m.get('role') in ('user', 'assistant')
+        and 'content' in m
+    ]
+
+    system_prompt = (
+        f'You are a concise plant disease expert. '
+        f'The user\'s plant was diagnosed as "{disease}". '
+        f'Answer questions about symptoms, causes, spread, treatment, and prevention. '
+        f'Keep responses practical and under 150 words unless more detail is requested.'
+    )
+
+    messages = [{'role': 'system', 'content': system_prompt}] + clean_history
+
+    try:
+        resp = http_requests.post(
+            'https://api.deepseek.com/chat/completions',
+            headers={
+                'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                'Content-Type': 'application/json',
+            },
+            json={'model': 'deepseek-chat', 'messages': messages, 'max_tokens': 512},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        reply = resp.json()['choices'][0]['message']['content']
+        return jsonify({'reply': reply})
+    except http_requests.exceptions.Timeout:
+        return jsonify({'error': 'Chat service timed out. Please try again.'}), 504
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
 
 
 if __name__ == '__main__':

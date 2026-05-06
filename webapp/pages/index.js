@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
 import Head from 'next/head'
 
@@ -36,6 +36,26 @@ function LeafIcon({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path d="M17 8C8 10 5.9 16.17 3.82 21H5.71C7 18 8.83 16 11 15c2.17-1 4.17-.5 5 0-1 1.17-3 4.5-3 7h2c0-3 1.5-6 4-8 1.17-3.83-.5-8-2-6z"/>
+    </svg>
+  )
+}
+
+function ChatIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+      />
+    </svg>
+  )
+}
+
+function SendIcon({ className }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+      />
     </svg>
   )
 }
@@ -101,6 +121,11 @@ export default function Home() {
   const [classes, setClasses] = useState([])
   const [classesOpen, setClassesOpen] = useState(false)
   const [classSearch, setClassSearch] = useState('')
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const chatScrollRef = useRef(null)
 
   useEffect(() => {
     fetch('/api/python/model-info')
@@ -148,6 +173,9 @@ export default function Home() {
       setPreview(URL.createObjectURL(file))
       setPredictions(null)
       setError(null)
+      setChatMessages([])
+      setChatInput('')
+      setChatOpen(false)
       classify(file)
     },
     [classify, preview]
@@ -165,10 +193,46 @@ export default function Home() {
     setPreview(null)
     setPredictions(null)
     setError(null)
+    setChatMessages([])
+    setChatInput('')
+    setChatOpen(false)
   }
 
   const maxConf = predictions ? predictions[0].confidence : 100
   const topPred = predictions?.[0]
+
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [chatMessages])
+
+  useEffect(() => {
+    if (predictions && topPred && !isUnidentified(topPred.class) && !isHealthy(topPred.class)) {
+      setChatOpen(true)
+    }
+  }, [predictions])
+
+  const sendChat = useCallback(async (text) => {
+    if (!text.trim() || chatLoading || !topPred) return
+    const userMsg = { role: 'user', content: text.trim() }
+    const newHistory = [...chatMessages, userMsg]
+    setChatMessages(newHistory)
+    setChatInput('')
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/python/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disease: fmt(topPred.class), history: newHistory }),
+      })
+      const data = await res.json()
+      setChatMessages((h) => [...h, { role: 'assistant', content: data.reply || data.error || 'No response.' }])
+    } catch {
+      setChatMessages((h) => [...h, { role: 'assistant', content: 'Could not reach chat service. Make sure the server is running.' }])
+    } finally {
+      setChatLoading(false)
+    }
+  }, [chatLoading, chatMessages, topPred])
 
   return (
     <>
@@ -447,6 +511,108 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {/* ── Treatment Assistant chatbot ── */}
+          {predictions && topPred && !isUnidentified(topPred.class) && (
+            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => setChatOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-ecu-red-light flex items-center justify-center flex-shrink-0">
+                    <ChatIcon className="w-4 h-4 text-ecu-red" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-ecu-gray-light">
+                      Treatment Assistant
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Ask about {fmt(topPred.class)}
+                    </p>
+                  </div>
+                </div>
+                <svg
+                  className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${chatOpen ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {chatOpen && (
+                <div className="border-t border-gray-100 flex flex-col">
+                  {/* Messages */}
+                  <div ref={chatScrollRef} className="px-5 py-4 max-h-80 overflow-y-auto flex flex-col gap-3">
+                    {chatMessages.length === 0 && (
+                      <div className="text-center py-2">
+                        <p className="text-sm text-gray-400 mb-3">
+                          Ask me anything about this disease
+                        </p>
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          {['What causes this?', 'How do I treat it?', 'How does it spread?', 'How to prevent it?'].map((q) => (
+                            <button
+                              key={q}
+                              onClick={() => sendChat(q)}
+                              disabled={chatLoading}
+                              className="text-xs px-3 py-1.5 rounded-full border border-ecu-red/30 text-ecu-red bg-ecu-red-light hover:bg-ecu-red hover:text-white transition-colors disabled:opacity-40"
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={[
+                          'max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap',
+                          msg.role === 'user'
+                            ? 'bg-ecu-red text-white rounded-br-sm'
+                            : 'bg-gray-100 text-gray-700 rounded-bl-sm',
+                        ].join(' ')}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+
+                    {chatLoading && (
+                      <div className="flex justify-start">
+                        <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3">
+                          <div className="flex gap-1 items-center">
+                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input */}
+                  <div className="border-t border-gray-100 px-4 py-3 flex gap-2">
+                    <input
+                      type="text"
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChat(chatInput)}
+                      placeholder="Ask about treatment, causes, prevention…"
+                      disabled={chatLoading}
+                      className="flex-1 text-sm px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-ecu-red/30 focus:border-ecu-red/50 placeholder-gray-300 disabled:opacity-50"
+                    />
+                    <button
+                      onClick={() => sendChat(chatInput)}
+                      disabled={!chatInput.trim() || chatLoading}
+                      className="w-10 h-10 flex-shrink-0 rounded-xl bg-ecu-red text-white flex items-center justify-center hover:bg-ecu-red-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <SendIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Classes dropdown */}
           {classes.length > 0 && (
